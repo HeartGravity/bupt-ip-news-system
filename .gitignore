@@ -2,3 +2,21 @@ node_modules
 .idea
 .vscode
 .env
+
+# ML 模型文件（体积过大，不提交到仓库）
+ml/models/lora-adapter/
+ml/models/merged/
+!ml/models/.gitkeep
+
+# 原始导出数据
+ml/data/raw/*.jsonl
+ml/data/train.jsonl
+ml/data/eval.jsonl
+
+# Python 虚拟环境
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+.gitkeep

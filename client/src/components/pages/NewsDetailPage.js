@@ -261,7 +261,7 @@ useEffect(() => {
       
       <NewsContainer className="container">
         <MainContent>
-          <NewsContent dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(content) }} />
+          <NewsContent dangerouslySetInnerHTML={{ __html: content }} />
           
           <TagsContainer>
             {tags.map((tag, index) => (
@@ -307,53 +307,6 @@ useEffect(() => {
   );
 };
 
-// 将Markdown格式转换为HTML格式
-// 这里使用一个简单的实现，实际项目中可能需要使用如marked.js等库
-const formatMarkdownToHtml = (markdown) => {
-  if (!markdown) return '';
-  
-  // 替换标题
-  let html = markdown
-    .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-    .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-    .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-    .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
-    .replace(/^##### (.*$)/gm, '<h5>$1</h5>')
-    .replace(/^###### (.*$)/gm, '<h6>$1</h6>');
-  
-  // 替换粗体和斜体
-  html = html
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/__(.*?)__/g, '<strong>$1</strong>')
-    .replace(/_(.*?)_/g, '<em>$1</em>');
-  
-  // 替换链接
-  html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
-  
-  // 替换列表
-  html = html
-    .replace(/^\* (.*$)/gm, '<ul><li>$1</li></ul>')
-    .replace(/^\- (.*$)/gm, '<ul><li>$1</li></ul>')
-    .replace(/^\+ (.*$)/gm, '<ul><li>$1</li></ul>')
-    .replace(/^\d+\. (.*$)/gm, '<ol><li>$1</li></ol>');
-  
-  // 修复列表标签
-  html = html
-    .replace(/<\/ul><ul>/g, '')
-    .replace(/<\/ol><ol>/g, '');
-  
-  // 替换分隔线
-  html = html.replace(/^\-\-\-$/gm, '<hr>');
-  
-  // 替换段落
-  html = html.replace(/^([^<].*?)$/gm, '<p>$1</p>');
-  
-  // 替换换行符
-  html = html.replace(/\n$/gm, '');
-  
-  return html;
-};
 
 // 样式组件
 const PageContainer = styled.div`
@@ -462,8 +415,28 @@ const MainContent = styled.div`
 const NewsContent = styled.div`
   line-height: 1.8;
   color: var(--text-primary);
-  font-size: var(--font-size-md);
-  
+  font-size: 16px;
+  font-family: inherit;
+
+  /* 重置原站内联字体/大小，避免全文统一大号黑体 */
+  * {
+    font-family: inherit !important;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: var(--spacing-md) 0;
+  }
+  td, th {
+    border: 1px solid var(--border-color);
+    padding: 6px 10px;
+  }
+  th {
+    background-color: var(--bg-primary);
+    font-weight: bold;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     margin-top: var(--spacing-xl);
     margin-bottom: var(--spacing-md);

@@ -7,6 +7,34 @@ const HUNYUAN_API_URL =
   "https://api.hunyuan.cloud.tencent.com/v1/chat/completions";
 const HUNYUAN_MODEL = "hunyuan-turbo";
 
+// ── 本地 LLM 配置 ────────────────────────────────────────────────────────────
+// 当设置了 LOCAL_LLM_URL 时，优先使用本地微调模型；否则回退到 Hunyuan API
+function getLLMConfig() {
+  const localUrl = process.env.LOCAL_LLM_URL; // 例如 http://localhost:8000
+  if (localUrl) {
+    return {
+      url: `${localUrl.replace(/\/$/, "")}/v1/chat/completions`,
+      model: process.env.LOCAL_LLM_MODEL || "local-finetuned",
+      headers: { "Content-Type": "application/json" },
+      isLocal: true,
+    };
+  }
+  return {
+    url: HUNYUAN_API_URL,
+    model: HUNYUAN_MODEL,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.HUNYUAN_API_KEY}`,
+    },
+    isLocal: false,
+  };
+}
+
+// 检查当前 AI 服务是否可用（本地模型 或 配置了 Hunyuan key）
+function isAIAvailable() {
+  return !!(process.env.LOCAL_LLM_URL || process.env.HUNYUAN_API_KEY);
+}
+
 const BASE_SYSTEM_PROMPT = `你是北京邮电大学知识产权服务中心的AI智能助手。你的职责是：
 1. 解答用户关于专利、商标、著作权等知识产权相关的问题
 2. 提供知识产权申请流程指导
@@ -34,7 +62,6 @@ function isSameTopic(query1, query2) {
 // 异步生成对话摘要，不阻塞主线程
 async function generateSummaryAsync(chatId, contextMessages) {
   try {
-    // 构造一条指令让AI进行总结
     const prompt = [
       ...contextMessages,
       {
@@ -43,17 +70,15 @@ async function generateSummaryAsync(chatId, contextMessages) {
       },
     ];
 
-    const response = await fetch(HUNYUAN_API_URL, {
+    const llm = getLLMConfig();
+    const response = await fetch(llm.url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.HUNYUAN_API_KEY}`,
-      },
+      headers: llm.headers,
       body: JSON.stringify({
-        model: HUNYUAN_MODEL,
+        model: llm.model,
         messages: prompt,
         stream: false,
-        temperature: 0.5, // 使用较低的温度以保障客观的总结
+        temperature: 0.5,
         max_tokens: 300,
       }),
     });
@@ -62,7 +87,6 @@ async function generateSummaryAsync(chatId, contextMessages) {
       const data = await response.json();
       const summary = data.choices?.[0]?.message?.content;
       if (summary) {
-        // 更新数据库记录的文本摘要
         await ChatHistory.findByIdAndUpdate(chatId, { summary });
         console.log(`对话[${chatId}]摘要已生成:`, summary);
       }
@@ -85,16 +109,14 @@ function buildSystemPrompt(ragContext, summary = "") {
   return prompt;
 }
 
-// 调用 Hunyuan 流式 API 的核心逻辑
-async function callHunyuanStream(contextMessages, res) {
-  const response = await fetch(HUNYUAN_API_URL, {
+// 调用 LLM 流式 API（兼容本地模型与 Hunyuan）
+async function callLLMStream(contextMessages, res) {
+  const llm = getLLMConfig();
+  const response = await fetch(llm.url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.HUNYUAN_API_KEY}`,
-    },
+    headers: llm.headers,
     body: JSON.stringify({
-      model: HUNYUAN_MODEL,
+      model: llm.model,
       messages: contextMessages,
       stream: true,
       temperature: 0.7,
@@ -104,8 +126,9 @@ async function callHunyuanStream(contextMessages, res) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("Hunyuan API 错误:", response.status, errorText);
-    throw new Error(`Hunyuan API 返回 ${response.status}`);
+    const provider = llm.isLocal ? "本地 LLM" : "Hunyuan API";
+    console.error(`${provider} 错误:`, response.status, errorText);
+    throw new Error(`${provider} 返回 ${response.status}`);
   }
 
   const reader = response.body.getReader();
@@ -156,7 +179,7 @@ exports.streamMessage = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse("消息内容不能为空", 400));
   }
 
-  if (!process.env.HUNYUAN_API_KEY) {
+  if (!isAIAvailable()) {
     return next(new ErrorResponse("AI 服务未配置，请联系管理员", 500));
   }
 
@@ -232,7 +255,7 @@ exports.streamMessage = asyncHandler(async (req, res, next) => {
   let fullReply = "";
 
   try {
-    fullReply = await callHunyuanStream(contextMessages, res);
+    fullReply = await callLLMStream(contextMessages, res);
 
     if (fullReply) {
       chat.messages.push({ role: "assistant", content: fullReply });
@@ -281,9 +304,9 @@ exports.sendMessage = asyncHandler(async (req, res, next) => {
 
   chat.messages.push({ role: "user", content: message.trim() });
 
-  let aiReply = "AI 服务未配置，请联系管理员设置 HUNYUAN_API_KEY。";
+  let aiReply = "AI 服务未配置，请联系管理员。";
 
-  if (process.env.HUNYUAN_API_KEY) {
+  if (isAIAvailable()) {
     const ragContext = await retrieveContext(message.trim());
     const contextMessages = [
       { role: "system", content: buildSystemPrompt(ragContext) },
@@ -292,15 +315,13 @@ exports.sendMessage = asyncHandler(async (req, res, next) => {
         .map((m) => ({ role: m.role, content: m.content })),
     ];
 
+    const llm = getLLMConfig();
     try {
-      const response = await fetch(HUNYUAN_API_URL, {
+      const response = await fetch(llm.url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.HUNYUAN_API_KEY}`,
-        },
+        headers: llm.headers,
         body: JSON.stringify({
-          model: HUNYUAN_MODEL,
+          model: llm.model,
           messages: contextMessages,
           stream: false,
           temperature: 0.7,
@@ -313,7 +334,8 @@ exports.sendMessage = asyncHandler(async (req, res, next) => {
       const data = await response.json();
       aiReply = data.choices?.[0]?.message?.content || "抱歉，未能获取到回复。";
     } catch (err) {
-      console.error("Hunyuan API 调用失败:", err);
+      const provider = llm.isLocal ? "本地 LLM" : "Hunyuan API";
+      console.error(`${provider} 调用失败:`, err);
       aiReply = "抱歉，AI 服务暂时不可用，请稍后再试。";
     }
   }
