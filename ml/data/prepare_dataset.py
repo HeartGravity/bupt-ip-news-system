@@ -46,7 +46,7 @@ SYSTEM_PROMPT = (
 # ── 新闻问题模板 ──────────────────────────────────────────────────────────
 NEWS_QA_TEMPLATES = [
     ("{title}的主要内容是什么？", "{summary}\n\n{content}"),
-    ("请介绍一下"{title}"", "{summary}\n\n{content}"),
+    ("请介绍一下{title}", "{summary}\n\n{content}"),
     ("{category}领域有什么最新动态？", "根据最新资讯，{title}。\n\n{content}"),
     ("关于{title}，有哪些值得关注的信息？", "{content}"),
     ("请总结{title}的核心要点。", "{summary}"),

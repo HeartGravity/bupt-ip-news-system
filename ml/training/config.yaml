@@ -1,20 +1,20 @@
 # ── 模型与数据 ──────────────────────────────────────────────────────────────
 # 推荐使用 Qwen2.5-7B-Instruct（中文能力强，Apache 2.0 协议）
 # 如果显存不足，可改用 Qwen2.5-1.5B-Instruct 或 Qwen2.5-3B-Instruct
-model_name: "Qwen/Qwen2.5-7B-Instruct"
+model_name: "Qwen/Qwen2.5-14B-Instruct"
 
 train_file: "ml/data/train.jsonl"
 eval_file: "ml/data/eval.jsonl"
 
 # ── 输出目录 ─────────────────────────────────────────────────────────────────
-output_dir: "ml/models/lora-adapter"   # LoRA adapter 保存位置
-merged_dir: "ml/models/merged"         # 合并后的完整模型（供推理使用）
+output_dir: "ml/models/lora-adapter" # LoRA adapter 保存位置
+merged_dir: "ml/models/merged" # 合并后的完整模型（供推理使用）
 
 # ── LoRA 超参数 ───────────────────────────────────────────────────────────────
-lora_r: 16              # LoRA rank（越大效果越好，但显存占用越多）
-lora_alpha: 32          # LoRA scaling factor（通常设为 2*r）
+lora_r: 64 # LoRA rank（越大效果越好，但显存占用越多）
+lora_alpha: 128 # LoRA scaling factor（通常设为 2*r）
 lora_dropout: 0.05
-lora_target_modules:    # 需要训练的模块名（Qwen2.5 架构）
+lora_target_modules: # 需要训练的模块名（Qwen2.5 架构）
   - "q_proj"
   - "k_proj"
   - "v_proj"
@@ -26,13 +26,13 @@ lora_target_modules:    # 需要训练的模块名（Qwen2.5 架构）
 # ── 量化（可选，节省显存）────────────────────────────────────────────────────
 # 设为 true 使用 4-bit QLoRA（需要 bitsandbytes）
 use_4bit: true
-bnb_4bit_compute_dtype: "bfloat16"   # 建议 bfloat16（Ampere 及以上 GPU）
+bnb_4bit_compute_dtype: "bfloat16" # 建议 bfloat16（Ampere 及以上 GPU）
 
 # ── 训练超参数 ────────────────────────────────────────────────────────────────
 num_train_epochs: 3
-per_device_train_batch_size: 2
+per_device_train_batch_size: 1
 per_device_eval_batch_size: 2
-gradient_accumulation_steps: 8   # 等效 batch size = 2 * 8 = 16
+gradient_accumulation_steps: 16 # 等效 batch size = 2 * 8 = 16
 learning_rate: 2.0e-4
 lr_scheduler_type: "cosine"
 warmup_ratio: 0.05
@@ -48,7 +48,7 @@ load_best_model_at_end: true
 metric_for_best_model: "eval_loss"
 
 # ── 其他 ──────────────────────────────────────────────────────────────────────
-fp16: false      # 与 bfloat16 二选一，A100/H100 用 bf16，RTX 3090/4090 也支持 bf16
+fp16: false # 与 bfloat16 二选一，A100/H100 用 bf16，RTX 3090/4090 也支持 bf16
 bf16: true
-dataloader_num_workers: 0   # Windows 下建议设为 0
-report_to: "none"           # 可改为 "tensorboard" 或 "wandb"
+dataloader_num_workers: 4 # Windows 下建议设为 0
+report_to: "none" # 可改为 "tensorboard" 或 "wandb"
