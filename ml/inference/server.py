@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import time
+from typing import Optional
 import uuid
 from pathlib import Path
 
@@ -64,7 +65,7 @@ class ChatCompletionRequest(BaseModel):
 
 
 # ── 工具函数：构造 OpenAI 格式的响应块 ────────────────────────────────────
-def make_chunk(content: str, finish_reason: str | None = None, request_id: str = "") -> str:
+def make_chunk(content: str, finish_reason: Optional[str] = None, request_id: str = "") -> str:
     chunk = {
         "id": f"chatcmpl-{request_id}",
         "object": "chat.completion.chunk",

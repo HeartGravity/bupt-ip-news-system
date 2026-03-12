@@ -6,7 +6,7 @@ import asyncio
 import os
 import threading
 from pathlib import Path
-from typing import AsyncIterator, Iterator
+from typing import AsyncIterator, Iterator, Optional
 
 import torch
 from peft import PeftModel
@@ -23,8 +23,8 @@ class LocalLLM:
     def __init__(
         self,
         model_path: str,
-        base_model_path: str | None = None,
-        device: str | None = None,
+        base_model_path: Optional[str] = None,
+        device: Optional[str] = None,
         load_in_8bit: bool = False,
     ):
         """
@@ -70,22 +70,63 @@ class LocalLLM:
 
         print(f"[LocalLLM] 加载模型: {load_path}")
 
+        offload_dir: Optional[Path] = None
         kwargs: dict = {
             "device_map": "auto" if self.device == "cuda" else self.device,
             "trust_remote_code": True,
         }
         if self.load_in_8bit and self.device == "cuda":
             from transformers import BitsAndBytesConfig
+
             kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+            # 提前准备 offload 目录，供 base model 与 LoRA adapter 复用。
+            offload_dir = Path(os.getenv("BNB_OFFLOAD_DIR", ".bnb_offload"))
+            offload_dir.mkdir(parents=True, exist_ok=True)
+            kwargs["offload_folder"] = str(offload_dir)
         else:
             kwargs["torch_dtype"] = torch.bfloat16 if self.device == "cuda" else torch.float32
 
-        model = AutoModelForCausalLM.from_pretrained(load_path, **kwargs)
+        try:
+            model = AutoModelForCausalLM.from_pretrained(load_path, **kwargs)
+        except ValueError as e:
+            # 8-bit 下显存不足时，transformers 可能要求显式开启 CPU offload。
+            if self.load_in_8bit and self.device == "cuda" and "llm_int8_enable_fp32_cpu_offload" in str(e):
+                from transformers import BitsAndBytesConfig
+
+                print("[LocalLLM] 显存不足，启用 int8 + FP32 CPU offload 重试加载")
+                offload_dir = Path(os.getenv("BNB_OFFLOAD_DIR", ".bnb_offload"))
+                offload_dir.mkdir(parents=True, exist_ok=True)
+
+                kwargs["quantization_config"] = BitsAndBytesConfig(
+                    load_in_8bit=True,
+                    llm_int8_enable_fp32_cpu_offload=True,
+                )
+                kwargs["offload_folder"] = str(offload_dir)
+
+                # 给 auto device map 预留一点余量，减少 OOM 风险
+                total_gib = max(1, int(torch.cuda.get_device_properties(0).total_memory // (1024 ** 3)))
+                kwargs["max_memory"] = {
+                    0: f"{max(1, total_gib - 1)}GiB",
+                    "cpu": "64GiB",
+                }
+
+                model = AutoModelForCausalLM.from_pretrained(load_path, **kwargs)
+            else:
+                raise
 
         if is_lora_adapter:
             print(f"[LocalLLM] 加载 LoRA adapter: {self.model_path}")
-            model = PeftModel.from_pretrained(model, self.model_path)
-            model = model.merge_and_unload()
+            peft_kwargs = {}
+            # 当基座模型存在 CPU/disk offload 时，PEFT 二次 dispatch 也需要 offload_folder。
+            if offload_dir is not None:
+                peft_kwargs["device_map"] = "auto"
+                peft_kwargs["offload_folder"] = str(offload_dir)
+
+            model = PeftModel.from_pretrained(model, self.model_path, **peft_kwargs)
+            if self.load_in_8bit and self.device == "cuda":
+                print("[LocalLLM] 8-bit 模式下跳过 merge_and_unload，避免额外内存峰值")
+            else:
+                model = model.merge_and_unload()
 
         model.eval()
         self.model = model
@@ -177,7 +218,7 @@ class LocalLLM:
         top_p: float = 0.9,
     ) -> AsyncIterator[str]:
         loop = asyncio.get_event_loop()
-        queue: asyncio.Queue[str | None] = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue()
 
         def _run():
             for token in self.stream_generate(messages, max_new_tokens, temperature, top_p):
@@ -197,7 +238,7 @@ class LocalLLM:
 
 
 # ── 单例模型实例（由 server.py 初始化） ──────────────────────────────────────
-_llm_instance: LocalLLM | None = None
+_llm_instance: Optional[LocalLLM] = None
 
 
 def get_llm() -> LocalLLM:
@@ -208,8 +249,8 @@ def get_llm() -> LocalLLM:
 
 def init_llm(
     model_path: str,
-    base_model_path: str | None = None,
-    device: str | None = None,
+    base_model_path: Optional[str] = None,
+    device: Optional[str] = None,
     load_in_8bit: bool = False,
 ) -> LocalLLM:
     global _llm_instance

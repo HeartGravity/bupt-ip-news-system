@@ -2,10 +2,12 @@ node_modules
 .idea
 .vscode
 .env
+.cursor
+.bnb_offload
 
 # ML 模型文件（体积过大，不提交到仓库）
-ml/models/lora-adapter/
-ml/models/merged/
+ml/models/lora-adapter-14B/
+ml/models/lora-adapter-7B/
 !ml/models/.gitkeep
 
 # 原始导出数据

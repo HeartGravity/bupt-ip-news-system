@@ -1,7 +1,7 @@
 # ── 模型与数据 ──────────────────────────────────────────────────────────────
 # 推荐使用 Qwen2.5-7B-Instruct（中文能力强，Apache 2.0 协议）
 # 如果显存不足，可改用 Qwen2.5-1.5B-Instruct 或 Qwen2.5-3B-Instruct
-model_name: "Qwen/Qwen2.5-14B-Instruct"
+model_name: "Qwen/Qwen2.5-7B-Instruct"
 
 train_file: "ml/data/train.jsonl"
 eval_file: "ml/data/eval.jsonl"
@@ -50,5 +50,5 @@ metric_for_best_model: "eval_loss"
 # ── 其他 ──────────────────────────────────────────────────────────────────────
 fp16: false # 与 bfloat16 二选一，A100/H100 用 bf16，RTX 3090/4090 也支持 bf16
 bf16: true
-dataloader_num_workers: 4 # Windows 下建议设为 0
-report_to: "none" # 可改为 "tensorboard" 或 "wandb"
+dataloader_num_workers: 8 # Windows 下建议设为 0
+report_to: "tensorboard" # 可改为 "tensorboard" 或 "wandb"

@@ -1,10 +1,11 @@
-爬到的很少，基本上都跳过了，爬出来的是乱码
+√ 爬到的很少，基本上都跳过了，爬出来的是乱码
 
-显示文章的问题，字体一样的都很大，去掉头尾的-->begin和end标志，把原文链接变成超链接形式
+√ 显示文章的问题，字体一样的都很大，去掉头尾的-->begin和end标志，把原文链接变成超链接形式
 
-换行分段
+√ 换行分段
 
-每个板块显示多个条目时没有分页
+√ 每个板块显示多个条目时没有分页
 
-@ml\ @server/models\ @server/utils\ 我现在要为我的一个知识产权网站新增AI智能助手的部分，暂时的设想是使用爬取到和下载的一些文本数据（主要是一些新闻语料和法律法规的docx文件）对现有
-的预训练好的模型（从huggingface上获取）做微调的工作，现在我的server目录下的models目录和utils目录中已经包含了对本地要使用数据的处理过程，我下一步该如何推进工作
+set HF_ENDPOINT=https://hf-mirror.com
+
+python ml/inference/server.py --model ml/models/lora-adapter --8bit

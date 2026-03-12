@@ -8,31 +8,54 @@ const HUNYUAN_API_URL =
 const HUNYUAN_MODEL = "hunyuan-turbo";
 
 // ── 本地 LLM 配置 ────────────────────────────────────────────────────────────
-// 当设置了 LOCAL_LLM_URL 时，优先使用本地微调模型；否则回退到 Hunyuan API
-function getLLMConfig() {
+// 支持本地模型 + Hunyuan 双通道：
+// - 命中站内资料时优先本地
+// - 未命中时优先 Hunyuan
+// - 首选失败时自动回退到另一路
+function getProviderConfigs() {
+  const providers = [];
+
   const localUrl = process.env.LOCAL_LLM_URL; // 例如 http://localhost:8000
   if (localUrl) {
-    return {
+    providers.push({
       url: `${localUrl.replace(/\/$/, "")}/v1/chat/completions`,
       model: process.env.LOCAL_LLM_MODEL || "local-finetuned",
       headers: { "Content-Type": "application/json" },
       isLocal: true,
-    };
+      name: "本地 LLM",
+    });
   }
-  return {
-    url: HUNYUAN_API_URL,
-    model: HUNYUAN_MODEL,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.HUNYUAN_API_KEY}`,
-    },
-    isLocal: false,
-  };
+
+  if (process.env.HUNYUAN_API_KEY) {
+    providers.push({
+      url: HUNYUAN_API_URL,
+      model: HUNYUAN_MODEL,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.HUNYUAN_API_KEY}`,
+      },
+      isLocal: false,
+      name: "Hunyuan API",
+    });
+  }
+
+  return providers;
+}
+
+function getProviderOrder({ preferLocal = true } = {}) {
+  const providers = getProviderConfigs();
+  if (providers.length <= 1) return providers;
+
+  const local = providers.find((p) => p.isLocal);
+  const remote = providers.find((p) => !p.isLocal);
+
+  if (!local || !remote) return providers;
+  return preferLocal ? [local, remote] : [remote, local];
 }
 
 // 检查当前 AI 服务是否可用（本地模型 或 配置了 Hunyuan key）
 function isAIAvailable() {
-  return !!(process.env.LOCAL_LLM_URL || process.env.HUNYUAN_API_KEY);
+  return getProviderConfigs().length > 0;
 }
 
 const BASE_SYSTEM_PROMPT = `你是北京邮电大学知识产权服务中心的AI智能助手。你的职责是：
@@ -70,21 +93,12 @@ async function generateSummaryAsync(chatId, contextMessages) {
       },
     ];
 
-    const llm = getLLMConfig();
-    const response = await fetch(llm.url, {
-      method: "POST",
-      headers: llm.headers,
-      body: JSON.stringify({
-        model: llm.model,
-        messages: prompt,
-        stream: false,
-        temperature: 0.5,
-        max_tokens: 300,
-      }),
+    const data = await callLLMNonStream(prompt, {
+      preferLocal: true,
+      temperature: 0.5,
+      maxTokens: 300,
     });
-
-    if (response.ok) {
-      const data = await response.json();
+    if (data) {
       const summary = data.choices?.[0]?.message?.content;
       if (summary) {
         await ChatHistory.findByIdAndUpdate(chatId, { summary });
@@ -110,63 +124,115 @@ function buildSystemPrompt(ragContext, summary = "") {
 }
 
 // 调用 LLM 流式 API（兼容本地模型与 Hunyuan）
-async function callLLMStream(contextMessages, res) {
-  const llm = getLLMConfig();
-  const response = await fetch(llm.url, {
-    method: "POST",
-    headers: llm.headers,
-    body: JSON.stringify({
-      model: llm.model,
-      messages: contextMessages,
-      stream: true,
-      temperature: 0.7,
-      max_tokens: 2048,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    const provider = llm.isLocal ? "本地 LLM" : "Hunyuan API";
-    console.error(`${provider} 错误:`, response.status, errorText);
-    throw new Error(`${provider} 返回 ${response.status}`);
+async function callLLMStream(contextMessages, res, { preferLocal = true } = {}) {
+  const providers = getProviderOrder({ preferLocal });
+  if (providers.length === 0) {
+    throw new Error("AI 服务未配置");
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let fullReply = "";
+  let lastError = null;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  for (const llm of providers) {
+    try {
+      const response = await fetch(llm.url, {
+        method: "POST",
+        headers: llm.headers,
+        body: JSON.stringify({
+          model: llm.model,
+          messages: contextMessages,
+          stream: true,
+          temperature: 0.7,
+          max_tokens: 2048,
+        }),
+      });
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop();
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data: ")) continue;
-
-      const data = trimmed.slice(6);
-      if (data === "[DONE]") continue;
-
-      try {
-        const parsed = JSON.parse(data);
-        const delta = parsed.choices?.[0]?.delta?.content;
-        if (delta) {
-          fullReply += delta;
-          res.write(
-            `data: ${JSON.stringify({ type: "chunk", content: delta })}\n\n`,
-          );
-        }
-      } catch (e) {
-        // 忽略解析失败的行
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`${llm.name} 返回 ${response.status}: ${errorText}`);
       }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullReply = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              fullReply += delta;
+              res.write(
+                `data: ${JSON.stringify({ type: "chunk", content: delta })}\n\n`,
+              );
+            }
+          } catch (e) {
+            // 忽略解析失败的行
+          }
+        }
+      }
+
+      return fullReply;
+    } catch (err) {
+      lastError = err;
+      console.error(`${llm.name} 调用失败，尝试回退:`, err.message || err);
     }
   }
 
-  return fullReply;
+  throw lastError || new Error("所有 AI 服务均不可用");
+}
+
+async function callLLMNonStream(
+  contextMessages,
+  { preferLocal = true, temperature = 0.7, maxTokens = 2048 } = {},
+) {
+  const providers = getProviderOrder({ preferLocal });
+  if (providers.length === 0) {
+    throw new Error("AI 服务未配置");
+  }
+
+  let lastError = null;
+  for (const llm of providers) {
+    try {
+      const response = await fetch(llm.url, {
+        method: "POST",
+        headers: llm.headers,
+        body: JSON.stringify({
+          model: llm.model,
+          messages: contextMessages,
+          stream: false,
+          temperature,
+          max_tokens: maxTokens,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`${llm.name} 返回 ${response.status}: ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (err) {
+      lastError = err;
+      console.error(`${llm.name} 调用失败，尝试回退:`, err.message || err);
+    }
+  }
+
+  throw lastError || new Error("所有 AI 服务均不可用");
 }
 
 // @desc    流式发送消息给AI智能体 (SSE + RAG)
@@ -241,6 +307,9 @@ exports.streamMessage = asyncHandler(async (req, res, next) => {
     ...recentMessages,
   ];
 
+  // 命中站内资料时优先本地；未命中时优先 Hunyuan（可联网能力更强）
+  const preferLocal = !!ragContext;
+
   // 设置 SSE 响应头
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -255,7 +324,7 @@ exports.streamMessage = asyncHandler(async (req, res, next) => {
   let fullReply = "";
 
   try {
-    fullReply = await callLLMStream(contextMessages, res);
+    fullReply = await callLLMStream(contextMessages, res, { preferLocal });
 
     if (fullReply) {
       chat.messages.push({ role: "assistant", content: fullReply });
@@ -315,27 +384,13 @@ exports.sendMessage = asyncHandler(async (req, res, next) => {
         .map((m) => ({ role: m.role, content: m.content })),
     ];
 
-    const llm = getLLMConfig();
+    const preferLocal = !!ragContext;
+
     try {
-      const response = await fetch(llm.url, {
-        method: "POST",
-        headers: llm.headers,
-        body: JSON.stringify({
-          model: llm.model,
-          messages: contextMessages,
-          stream: false,
-          temperature: 0.7,
-          max_tokens: 2048,
-        }),
-      });
-
-      if (!response.ok) throw new Error(`API 返回 ${response.status}`);
-
-      const data = await response.json();
+      const data = await callLLMNonStream(contextMessages, { preferLocal });
       aiReply = data.choices?.[0]?.message?.content || "抱歉，未能获取到回复。";
     } catch (err) {
-      const provider = llm.isLocal ? "本地 LLM" : "Hunyuan API";
-      console.error(`${provider} 调用失败:`, err);
+      console.error("LLM 调用失败:", err);
       aiReply = "抱歉，AI 服务暂时不可用，请稍后再试。";
     }
   }
