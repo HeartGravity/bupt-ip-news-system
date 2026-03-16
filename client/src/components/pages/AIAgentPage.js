@@ -1,30 +1,73 @@
-import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
-import styled from 'styled-components';
-import { FaPaperPlane, FaPlus, FaTrash, FaRobot, FaUser, FaHistory } from 'react-icons/fa';
-import { AuthContext } from '../../context/AuthContext';
-import { chatApi } from '../../services/chatService';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useContext,
+  useCallback,
+} from "react";
+import styled from "styled-components";
+import {
+  FaPaperPlane,
+  FaPlus,
+  FaTrash,
+  FaRobot,
+  FaUser,
+  FaHistory,
+  FaStop,
+} from "react-icons/fa";
+import { AuthContext } from "../../context/AuthContext";
+import { chatApi } from "../../services/chatService";
 
 const AIAgentPage = () => {
   const { user } = useContext(AuthContext);
   const [messages, setMessages] = useState([]);
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [chatId, setChatId] = useState(null);
   const [chatList, setChatList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
+  const shouldAutoScrollRef = useRef(true);
+  const requestAbortRef = useRef(null);
 
   // 加载对话列表
   useEffect(() => {
     loadChatList();
   }, []);
 
-  // 自动滚动到底部
+  const isNearBottom = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return true;
+
+    const threshold = 80;
+    return (
+      container.scrollHeight - container.scrollTop - container.clientHeight <=
+      threshold
+    );
+  };
+
+  const scrollToBottom = (behavior = "smooth") => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior,
+    });
+  };
+
+  // 仅在用户位于底部附近时自动跟随，避免阅读历史消息时被强制拉回底部
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (shouldAutoScrollRef.current) {
+      scrollToBottom(streaming ? "auto" : "smooth");
+    }
+  }, [messages, streaming]);
+
+  const handleMessagesScroll = () => {
+    shouldAutoScrollRef.current = isNearBottom();
+  };
 
   const loadChatList = async () => {
     try {
@@ -33,7 +76,7 @@ const AIAgentPage = () => {
         setChatList(res.data);
       }
     } catch (err) {
-      console.error('加载对话列表失败:', err);
+      console.error("加载对话列表失败:", err);
     }
   };
 
@@ -42,13 +85,17 @@ const AIAgentPage = () => {
     const text = inputValue.trim();
     if (!text || loading || streaming) return;
 
-    setInputValue('');
-    setMessages(prev => [...prev, { role: 'user', content: text }]);
+    setInputValue("");
+    shouldAutoScrollRef.current = true;
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
     setStreaming(true);
 
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
+
     // 先添加一个空的 assistant 消息，后续逐字填充
-    setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
     try {
       await chatApi.streamMessage(
@@ -56,32 +103,45 @@ const AIAgentPage = () => {
         chatId,
         // onChunk: 每收到一块内容，追加到最后一条 assistant 消息
         (chunk) => {
-          setMessages(prev => {
+          setMessages((prev) => {
             const updated = [...prev];
             const lastMsg = updated[updated.length - 1];
-            if (lastMsg && lastMsg.role === 'assistant') {
+            if (lastMsg && lastMsg.role === "assistant") {
               updated[updated.length - 1] = {
                 ...lastMsg,
-                content: lastMsg.content + chunk
+                content: lastMsg.content + chunk,
               };
             }
             return updated;
           });
         },
         // onStart: 收到 chatId 和标题
-        (newChatId, title) => {
+        (newChatId, title, meta) => {
           setChatId(newChatId);
           setLoading(false); // 收到第一个信号后隐藏加载状态
+          if (
+            meta?.provider ||
+            meta?.providerLabel ||
+            meta?.hasRag !== undefined
+          ) {
+            console.info("[AI Assistant] stream start:", {
+              chatId: newChatId,
+              title,
+              hasRag: meta?.hasRag ?? null,
+              provider: meta?.provider ?? null,
+              providerLabel: meta?.providerLabel ?? null,
+            });
+          }
         },
         // onError
         (errorMsg) => {
-          setMessages(prev => {
+          setMessages((prev) => {
             const updated = [...prev];
             const lastMsg = updated[updated.length - 1];
-            if (lastMsg && lastMsg.role === 'assistant') {
+            if (lastMsg && lastMsg.role === "assistant") {
               updated[updated.length - 1] = {
                 ...lastMsg,
-                content: errorMsg || '抱歉，服务暂时不可用，请稍后再试。'
+                content: errorMsg || "抱歉，服务暂时不可用，请稍后再试。",
               };
             }
             return updated;
@@ -92,30 +152,66 @@ const AIAgentPage = () => {
           setStreaming(false);
           loadChatList();
           inputRef.current?.focus();
-        }
+        },
+        (provider, providerLabel) => {
+          console.info("[AI Assistant] provider selected:", {
+            provider,
+            providerLabel,
+          });
+        },
+        controller.signal,
       );
     } catch (err) {
-      console.error('流式请求失败:', err);
-      setMessages(prev => {
+      if (err?.name !== "AbortError") {
+        console.error("流式请求失败:", err);
+      }
+      setMessages((prev) => {
         const updated = [...prev];
         const lastMsg = updated[updated.length - 1];
-        if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
+        if (
+          err?.name !== "AbortError" &&
+          lastMsg &&
+          lastMsg.role === "assistant" &&
+          !lastMsg.content
+        ) {
           updated[updated.length - 1] = {
             ...lastMsg,
-            content: '抱歉，服务暂时不可用，请稍后再试。'
+            content: "抱歉，服务暂时不可用，请稍后再试。",
           };
         }
         return updated;
       });
       setStreaming(false);
     } finally {
+      requestAbortRef.current = null;
       setLoading(false);
     }
   }, [inputValue, loading, streaming, chatId]);
 
+  const handleStopStreaming = () => {
+    if (!streaming) return;
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+    setStreaming(false);
+    setLoading(false);
+
+    setMessages((prev) => {
+      if (prev.length === 0) return prev;
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last?.role === "assistant" && !last?.content?.trim()) {
+        updated[updated.length - 1] = {
+          ...last,
+          content: "已停止生成。",
+        };
+      }
+      return updated;
+    });
+  };
+
   // 按回车发送
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -126,6 +222,7 @@ const AIAgentPage = () => {
     if (streaming) return;
     setChatId(null);
     setMessages([]);
+    shouldAutoScrollRef.current = true;
   };
 
   // 加载历史对话
@@ -137,9 +234,10 @@ const AIAgentPage = () => {
       if (res.success) {
         setChatId(res.data._id);
         setMessages(res.data.messages);
+        shouldAutoScrollRef.current = false;
       }
     } catch (err) {
-      console.error('加载对话失败:', err);
+      console.error("加载对话失败:", err);
     } finally {
       setLoading(false);
     }
@@ -156,7 +254,7 @@ const AIAgentPage = () => {
       }
       loadChatList();
     } catch (err) {
-      console.error('删除对话失败:', err);
+      console.error("删除对话失败:", err);
     }
   };
 
@@ -176,7 +274,7 @@ const AIAgentPage = () => {
           </NewChatButton>
         </SidebarHeader>
         <ChatListContainer>
-          {chatList.map(chat => (
+          {chatList.map((chat) => (
             <ChatListItem
               key={chat._id}
               $active={chatId === chat._id}
@@ -189,9 +287,7 @@ const AIAgentPage = () => {
               </DeleteButton>
             </ChatListItem>
           ))}
-          {chatList.length === 0 && (
-            <EmptyHint>暂无对话记录</EmptyHint>
-          )}
+          {chatList.length === 0 && <EmptyHint>暂无对话记录</EmptyHint>}
         </ChatListContainer>
       </Sidebar>
 
@@ -207,20 +303,26 @@ const AIAgentPage = () => {
           {streaming && <StreamingBadge>回答中...</StreamingBadge>}
         </ChatHeader>
 
-        <MessagesContainer>
+        <MessagesContainer
+          ref={messagesContainerRef}
+          onScroll={handleMessagesScroll}
+        >
           {messages.length === 0 ? (
             <WelcomeContainer>
-              <WelcomeIcon><FaRobot /></WelcomeIcon>
+              <WelcomeIcon>
+                <FaRobot />
+              </WelcomeIcon>
               <WelcomeTitle>北邮知识产权智能助手</WelcomeTitle>
               <WelcomeText>
-                您好，{user?.nickname || user?.username}！我可以为您解答知识产权相关问题，包括专利、商标、著作权等领域。
+                您好，{user?.nickname || user?.username}
+                ！我可以为您解答知识产权相关问题，包括专利、商标、著作权等领域。
               </WelcomeText>
               <SuggestionsGrid>
                 {[
-                  '如何申请专利？',
-                  '商标注册的流程是什么？',
-                  '遭遇知识产权侵权怎么办？',
-                  '著作权的保护期限是多久？'
+                  "如何申请专利？",
+                  "商标注册的流程是什么？",
+                  "遭遇知识产权侵权怎么办？",
+                  "著作权的保护期限是多久？",
                 ].map((q, i) => (
                   <SuggestionCard key={i} onClick={() => handleSuggestion(q)}>
                     {q}
@@ -232,14 +334,14 @@ const AIAgentPage = () => {
             messages.map((msg, index) => (
               <MessageRow key={index} $role={msg.role}>
                 <Avatar $role={msg.role}>
-                  {msg.role === 'user' ? <FaUser /> : <FaRobot />}
+                  {msg.role === "user" ? <FaUser /> : <FaRobot />}
                 </Avatar>
                 <MessageBubble $role={msg.role}>
                   {msg.content}
                   {/* 流式输出时最后一条 assistant 消息显示光标 */}
-                  {streaming && msg.role === 'assistant' && index === messages.length - 1 && (
-                    <Cursor />
-                  )}
+                  {streaming &&
+                    msg.role === "assistant" &&
+                    index === messages.length - 1 && <Cursor />}
                 </MessageBubble>
               </MessageRow>
             ))
@@ -247,15 +349,18 @@ const AIAgentPage = () => {
           {/* 等待第一个 chunk 时显示打字动画 */}
           {loading && (
             <MessageRow $role="assistant">
-              <Avatar $role="assistant"><FaRobot /></Avatar>
+              <Avatar $role="assistant">
+                <FaRobot />
+              </Avatar>
               <MessageBubble $role="assistant">
                 <TypingIndicator>
-                  <span></span><span></span><span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
                 </TypingIndicator>
               </MessageBubble>
             </MessageRow>
           )}
-          <div ref={messagesEndRef} />
         </MessagesContainer>
 
         {/* 输入区域 */}
@@ -270,8 +375,12 @@ const AIAgentPage = () => {
               rows={1}
               disabled={streaming}
             />
-            <SendButton onClick={handleSend} disabled={!inputValue.trim() || loading || streaming}>
-              <FaPaperPlane />
+            <SendButton
+              onClick={streaming ? handleStopStreaming : handleSend}
+              disabled={streaming ? false : !inputValue.trim() || loading}
+              title={streaming ? "停止生成" : "发送"}
+            >
+              {streaming ? <FaStop /> : <FaPaperPlane />}
             </SendButton>
           </InputWrapper>
           <Disclaimer>AI回答仅供参考，具体法律问题请咨询专业律师</Disclaimer>
@@ -290,7 +399,7 @@ const PageContainer = styled.div`
 `;
 
 const Sidebar = styled.aside`
-  width: ${props => props.$open ? '280px' : '0'};
+  width: ${(props) => (props.$open ? "280px" : "0")};
   background: white;
   border-right: 1px solid #e8e8e8;
   display: flex;
@@ -303,7 +412,7 @@ const Sidebar = styled.aside`
     position: absolute;
     z-index: 100;
     height: 100%;
-    width: ${props => props.$open ? '280px' : '0'};
+    width: ${(props) => (props.$open ? "280px" : "0")};
   }
 `;
 
@@ -351,12 +460,13 @@ const ChatListItem = styled.div`
   border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
-  color: ${props => props.$active ? 'var(--primary-color, #1a73e8)' : '#333'};
-  background: ${props => props.$active ? '#e8f0fe' : 'transparent'};
+  color: ${(props) =>
+    props.$active ? "var(--primary-color, #1a73e8)" : "#333"};
+  background: ${(props) => (props.$active ? "#e8f0fe" : "transparent")};
   transition: background 0.2s;
 
   &:hover {
-    background: ${props => props.$active ? '#e8f0fe' : '#f5f5f5'};
+    background: ${(props) => (props.$active ? "#e8f0fe" : "#f5f5f5")};
   }
 `;
 
@@ -375,7 +485,9 @@ const DeleteButton = styled.button`
   padding: 4px;
   font-size: 12px;
   opacity: 0;
-  transition: opacity 0.2s, color 0.2s;
+  transition:
+    opacity 0.2s,
+    color 0.2s;
 
   ${ChatListItem}:hover & {
     opacity: 1;
@@ -500,11 +612,13 @@ const SuggestionCard = styled.div`
   cursor: pointer;
   font-size: 14px;
   color: #333;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 
   &:hover {
     border-color: var(--primary-color, #1a73e8);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   }
 `;
 
@@ -513,7 +627,8 @@ const MessageRow = styled.div`
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 20px;
-  flex-direction: ${props => props.$role === 'user' ? 'row-reverse' : 'row'};
+  flex-direction: ${(props) =>
+    props.$role === "user" ? "row-reverse" : "row"};
 `;
 
 const Avatar = styled.div`
@@ -525,8 +640,10 @@ const Avatar = styled.div`
   justify-content: center;
   flex-shrink: 0;
   font-size: 16px;
-  background: ${props => props.$role === 'user' ? 'var(--primary-color, #1a73e8)' : '#e8f0fe'};
-  color: ${props => props.$role === 'user' ? 'white' : 'var(--primary-color, #1a73e8)'};
+  background: ${(props) =>
+    props.$role === "user" ? "var(--primary-color, #1a73e8)" : "#e8f0fe"};
+  color: ${(props) =>
+    props.$role === "user" ? "white" : "var(--primary-color, #1a73e8)"};
 `;
 
 const MessageBubble = styled.div`
@@ -536,10 +653,12 @@ const MessageBubble = styled.div`
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  background: ${props => props.$role === 'user' ? 'var(--primary-color, #1a73e8)' : 'white'};
-  color: ${props => props.$role === 'user' ? 'white' : '#333'};
-  border: ${props => props.$role === 'user' ? 'none' : '1px solid #e8e8e8'};
-  border-radius: ${props => props.$role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px'};
+  background: ${(props) =>
+    props.$role === "user" ? "var(--primary-color, #1a73e8)" : "white"};
+  color: ${(props) => (props.$role === "user" ? "white" : "#333")};
+  border: ${(props) => (props.$role === "user" ? "none" : "1px solid #e8e8e8")};
+  border-radius: ${(props) =>
+    props.$role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px"};
 `;
 
 const Cursor = styled.span`
@@ -552,8 +671,13 @@ const Cursor = styled.span`
   animation: blink 0.8s infinite;
 
   @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
   }
 `;
 
@@ -569,13 +693,25 @@ const TypingIndicator = styled.div`
     border-radius: 50%;
     animation: typing 1.4s infinite;
 
-    &:nth-child(2) { animation-delay: 0.2s; }
-    &:nth-child(3) { animation-delay: 0.4s; }
+    &:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    &:nth-child(3) {
+      animation-delay: 0.4s;
+    }
   }
 
   @keyframes typing {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-    30% { transform: translateY(-6px); opacity: 1; }
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-6px);
+      opacity: 1;
+    }
   }
 `;
 
@@ -628,7 +764,9 @@ const SendButton = styled.button`
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.2s, opacity 0.2s;
+  transition:
+    background 0.2s,
+    opacity 0.2s;
 
   &:hover:not(:disabled) {
     background: var(--primary-dark, #1557b0);

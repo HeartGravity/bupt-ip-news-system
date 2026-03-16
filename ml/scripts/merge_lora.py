@@ -21,7 +21,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # ── 路径配置 ─────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-DEFAULT_ADAPTER = PROJECT_ROOT / "ml" / "models" / "lora-adapter"
+DEFAULT_ADAPTER = PROJECT_ROOT / "ml" / "models" / "lora-adapter-7B"
 DEFAULT_OUTPUT = PROJECT_ROOT / "ml" / "models" / "merged"
 
 

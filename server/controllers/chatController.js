@@ -124,19 +124,35 @@ function buildSystemPrompt(ragContext, summary = "") {
 }
 
 // 调用 LLM 流式 API（兼容本地模型与 Hunyuan）
-async function callLLMStream(contextMessages, res, { preferLocal = true } = {}) {
+async function callLLMStream(
+  contextMessages,
+  res,
+  { preferLocal = true, onProviderSelected = null } = {},
+) {
   const providers = getProviderOrder({ preferLocal });
   if (providers.length === 0) {
     throw new Error("AI 服务未配置");
   }
 
   let lastError = null;
+  // 本地 7B + 8bit + offload 首 token 可能较慢，默认放宽到 5 分钟。
+  // 该超时为“空闲超时”：每次收到上游字节后都会重置。
+  const timeoutMs = Number(process.env.LLM_STREAM_TIMEOUT_MS || 300000);
 
   for (const llm of providers) {
+    const controller = new AbortController();
+    let timer;
+    const resetTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => controller.abort(), timeoutMs);
+    };
+
+    resetTimer();
     try {
       const response = await fetch(llm.url, {
         method: "POST",
         headers: llm.headers,
+        signal: controller.signal,
         body: JSON.stringify({
           model: llm.model,
           messages: contextMessages,
@@ -151,6 +167,8 @@ async function callLLMStream(contextMessages, res, { preferLocal = true } = {}) 
         throw new Error(`${llm.name} 返回 ${response.status}: ${errorText}`);
       }
 
+      onProviderSelected?.(llm);
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -159,6 +177,8 @@ async function callLLMStream(contextMessages, res, { preferLocal = true } = {}) 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
+        resetTimer();
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -173,6 +193,9 @@ async function callLLMStream(contextMessages, res, { preferLocal = true } = {}) 
 
           try {
             const parsed = JSON.parse(data);
+            if (parsed?.error?.message) {
+              throw new Error(`${llm.name} 返回错误: ${parsed.error.message}`);
+            }
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) {
               fullReply += delta;
@@ -186,10 +209,18 @@ async function callLLMStream(contextMessages, res, { preferLocal = true } = {}) 
         }
       }
 
-      return fullReply;
+      return { fullReply, provider: llm.isLocal ? "local" : "hunyuan" };
     } catch (err) {
-      lastError = err;
+      if (err?.name === "AbortError") {
+        lastError = new Error(
+          `${llm.name} 流式响应空闲超时（>${timeoutMs}ms）`,
+        );
+      } else {
+        lastError = err;
+      }
       console.error(`${llm.name} 调用失败，尝试回退:`, err.message || err);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 
@@ -206,11 +237,15 @@ async function callLLMNonStream(
   }
 
   let lastError = null;
+  const timeoutMs = Number(process.env.LLM_NONSTREAM_TIMEOUT_MS || 120000);
   for (const llm of providers) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(llm.url, {
         method: "POST",
         headers: llm.headers,
+        signal: controller.signal,
         body: JSON.stringify({
           model: llm.model,
           messages: contextMessages,
@@ -225,10 +260,20 @@ async function callLLMNonStream(
         throw new Error(`${llm.name} 返回 ${response.status}: ${errorText}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      return {
+        data,
+        provider: llm.isLocal ? "local" : "hunyuan",
+      };
     } catch (err) {
-      lastError = err;
+      if (err?.name === "AbortError") {
+        lastError = new Error(`${llm.name} 非流式响应超时（>${timeoutMs}ms）`);
+      } else {
+        lastError = err;
+      }
       console.error(`${llm.name} 调用失败，尝试回退:`, err.message || err);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -294,6 +339,12 @@ exports.streamMessage = asyncHandler(async (req, res, next) => {
     }
   }
 
+  console.log("[chat/stream] RAG 检索结果:", {
+    keywords,
+    ragHit: !!ragContext,
+    question: currentMsg,
+  });
+
   // 3. 上下文截断与 Token 管理
   // 近期消息只保留最后 6 轮（12条 message），防止超出 Token 限制
   const MAX_HISTORY = 12;
@@ -309,6 +360,10 @@ exports.streamMessage = asyncHandler(async (req, res, next) => {
 
   // 命中站内资料时优先本地；未命中时优先 Hunyuan（可联网能力更强）
   const preferLocal = !!ragContext;
+  console.log(
+    "[chat/stream] Provider 优先级:",
+    preferLocal ? "local -> hunyuan" : "hunyuan -> local",
+  );
 
   // 设置 SSE 响应头
   res.setHeader("Content-Type", "text/event-stream");
@@ -322,9 +377,20 @@ exports.streamMessage = asyncHandler(async (req, res, next) => {
   );
 
   let fullReply = "";
+  let provider = null;
 
   try {
-    fullReply = await callLLMStream(contextMessages, res, { preferLocal });
+    const result = await callLLMStream(contextMessages, res, {
+      preferLocal,
+      onProviderSelected: (selectedProvider) => {
+        provider = selectedProvider.isLocal ? "local" : "hunyuan";
+        console.log("[chat/stream] 实际选择 Provider:", provider);
+        res.write(
+          `data: ${JSON.stringify({ type: "provider", provider, providerLabel: selectedProvider.name })}\n\n`,
+        );
+      },
+    });
+    fullReply = result.fullReply;
 
     if (fullReply) {
       chat.messages.push({ role: "assistant", content: fullReply });
@@ -387,8 +453,13 @@ exports.sendMessage = asyncHandler(async (req, res, next) => {
     const preferLocal = !!ragContext;
 
     try {
-      const data = await callLLMNonStream(contextMessages, { preferLocal });
-      aiReply = data.choices?.[0]?.message?.content || "抱歉，未能获取到回复。";
+      const result = await callLLMNonStream(contextMessages, { preferLocal });
+      aiReply =
+        result.data.choices?.[0]?.message?.content || "抱歉，未能获取到回复。";
+      chat.$locals = {
+        ...(chat.$locals || {}),
+        provider: result.provider,
+      };
     } catch (err) {
       console.error("LLM 调用失败:", err);
       aiReply = "抱歉，AI 服务暂时不可用，请稍后再试。";
@@ -400,7 +471,12 @@ exports.sendMessage = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     success: true,
-    data: { chatId: chat._id, reply: aiReply, title: chat.title },
+    data: {
+      chatId: chat._id,
+      reply: aiReply,
+      title: chat.title,
+      provider: chat.$locals?.provider || null,
+    },
   });
 });
 
