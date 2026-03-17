@@ -60,8 +60,8 @@ const IPServiceCenter = () => {
           <HeroTitle>北京邮电大学知识产权服务中心</HeroTitle>
           <HeroSubtitle>为创新提供全方位知识产权支持与服务</HeroSubtitle>
           <HeroButtons>
-            <PrimaryButton as={Link} to="#services">了解服务内容</PrimaryButton>
-            <SecondaryButton as={Link} to="#contact">联系我们</SecondaryButton>
+            <PrimaryButton as="a" href="#services">了解服务内容</PrimaryButton>
+            <SecondaryButton as="a" href="#contact">联系我们</SecondaryButton>
           </HeroButtons>
         </HeroContent>
       </HeroSection>
