@@ -3,6 +3,9 @@ const User = require('../models/User');
 const { validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 
+// 转义正则表达式特殊字符，防止 ReDoS 攻击
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // @desc    获取所有新闻
 // @route   GET /api/news
 // @access  Public
@@ -57,8 +60,6 @@ exports.getNewsById = async (req, res) => {
       });
     }
 
-    console.log('尝试获取新闻详情，ID:', req.params.id);
-
     const news = await News.findById(req.params.id)
       .populate('author', 'username')
       .populate('comments.user', 'username');
@@ -71,11 +72,8 @@ exports.getNewsById = async (req, res) => {
       });
     }
 
-    // 更新浏览次数
-    news.views += 1;
-    await news.save();
-
-    console.log('成功获取新闻详情，ID:', req.params.id, '标题:', news.title);
+    // 更新浏览次数（原子操作，避免竞态条件）
+    await News.updateOne({ _id: news._id }, { $inc: { views: 1 } });
 
     res.status(200).json({
       success: true,
@@ -103,10 +101,11 @@ exports.createNews = async (req, res) => {
   }
 
   try {
-    // 添加作者信息
-    req.body.author = req.user.id;
+    // 白名单过滤，防止 Mass Assignment
+    const { title, summary, content, category, tags, coverImage, publishDate } = req.body;
+    const newsData = { title, summary, content, category, tags, coverImage, publishDate, author: req.user.id };
 
-    const news = await News.create(req.body);
+    const news = await News.create(newsData);
 
     res.status(201).json({
       success: true,
@@ -135,10 +134,21 @@ exports.updateNews = async (req, res) => {
       });
     }
 
+    // 白名单过滤更新字段，防止 Mass Assignment
+    const { title, summary, content, category, tags, coverImage, publishDate } = req.body;
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (summary !== undefined) updateData.summary = summary;
+    if (content !== undefined) updateData.content = content;
+    if (category !== undefined) updateData.category = category;
+    if (tags !== undefined) updateData.tags = tags;
+    if (coverImage !== undefined) updateData.coverImage = coverImage;
+    if (publishDate !== undefined) updateData.publishDate = publishDate;
+
     // 更新新闻
     news = await News.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     );
 
@@ -224,16 +234,14 @@ exports.searchNews = async (req, res) => {
           const textSearchCount = await News.countDocuments(textQuery);
 
           if (textSearchCount > 0) {
-            console.log(`全文搜索 "${trimmedQuery}" (含过滤) 预计可找到 ${textSearchCount} 条结果`);
             searchMethod = "fulltext";
             query = textQuery; // 使用包含 $text 的完整查询
             sortOptions = { score: { $meta: "textScore" } }; // 按相关度排序
             projection = { score: { $meta: "textScore" } }; // 必须投影 score 才能排序
           } else {
             // 全文搜索无结果，回退到正则
-            console.log(`全文搜索 "${trimmedQuery}" 无结果，回退到正则搜索`);
             searchMethod = "regex";
-            const regex = new RegExp(trimmedQuery, 'i');
+            const regex = new RegExp(escapeRegExp(trimmedQuery), 'i');
             query = {
               ...baseFilters,
               $or: [
@@ -244,9 +252,8 @@ exports.searchNews = async (req, res) => {
           }
         } catch (err) {
           // 全文搜索失败 (例如无索引)，回退到正则
-          console.warn('全文搜索失败，回退到正则表达式搜索:', err.message);
           searchMethod = "regex (fallback)";
-          const regex = new RegExp(trimmedQuery, 'i');
+          const regex = new RegExp(escapeRegExp(trimmedQuery), 'i');
           query = {
             ...baseFilters,
             $or: [
@@ -256,9 +263,8 @@ exports.searchNews = async (req, res) => {
         }
       } else {
         // 搜索词太短，直接使用正则
-        console.log(`搜索词 "${trimmedQuery}" 太短，使用正则搜索`);
         searchMethod = "regex (short query)";
-        const regex = new RegExp(trimmedQuery, 'i');
+        const regex = new RegExp(escapeRegExp(trimmedQuery), 'i');
         query = {
           ...baseFilters,
           $or: [
@@ -268,7 +274,6 @@ exports.searchNews = async (req, res) => {
       }
     } else {
       // 没有关键词，仅使用基础过滤
-      console.log('没有提供搜索关键词，仅按分类/标签过滤');
       searchMethod = "basic";
       query = baseFilters; // 使用基础过滤
     }
@@ -280,8 +285,6 @@ exports.searchNews = async (req, res) => {
       .skip(startIndex)
       .limit(limit)
       .populate('author', 'username');
-      
-    console.log(`最终查询 (方法: ${searchMethod}) 返回 ${news.length} 条结果 (第 ${page} 页)`);
 
     res.status(200).json({
       success: true,
@@ -367,16 +370,17 @@ exports.likeNews = async (req, res) => {
       });
     }
 
-    // 注意：这里简化了逻辑，每次调用都直接增加点赞数。
-    // 一个更完善的系统需要跟踪哪个用户点了赞，以防止重复点赞。
-    // 但由于模型已改为 Number，我们暂时只做计数增加。
-    news.likes = (news.likes || 0) + 1; // 直接增加计数
-    await news.save();
+    // 使用原子操作增加点赞数，避免竞态条件
+    const updatedNews = await News.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { likes: 1 } },
+      { new: true }
+    );
 
     return res.status(200).json({
       success: true,
-      likes: news.likes, // 返回更新后的点赞数
-      message: '点赞成功' // 消息可以保持不变或调整
+      likes: updatedNews.likes,
+      message: '点赞成功'
     });
 
   } catch (err) {

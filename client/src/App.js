@@ -45,9 +45,7 @@ import ResourceSharingPage from './components/pages/ResourceSharingPage';
 // 引入智能体页面组件
 import AIAgentPage from './components/pages/AIAgentPage';
 import PrivateRoute from './components/auth/PrivateRoute';
-
-// (可选) 引入用于保护路由的组件
-// import AdminRoute from './components/routing/AdminRoute'; 
+import AdminRoute from './components/auth/AdminRoute';
 
 function App() {
   return (
@@ -82,25 +80,15 @@ function App() {
             {/* 添加分类页面路由 */}
             <Route path="/category/:categoryName" element={<CategoryPage />} />
 
-            {/* 管理员路由 - 建议使用 AdminRoute 组件保护 */}
-            {/* <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} /> */}
-            {/* <Route path="/admin/users" element={<AdminRoute><UserManagementPage /></AdminRoute>} /> */}
-            {/* <Route path="/admin/news" element={<AdminRoute><AdminNewsManagementPage /></AdminRoute>} /> */}
-            {/* <Route path="/admin/news/create" element={<AdminRoute><AdminNewsCreatePage /></AdminRoute>} /> */}
-            {/* <Route path="/admin/news/edit/:id" element={<AdminRoute><AdminNewsEditPage /></AdminRoute>} /> */}
-            {/* <Route path="/admin/lectures" element={<AdminRoute><AdminLectureManagementPage /></AdminRoute>} /> */}
-            {/* <Route path="/admin/lectures/create" element={<AdminRoute><AdminLectureCreatePage /></AdminRoute>} /> */}
-            {/* <Route path="/admin/lectures/edit/:id" element={<AdminRoute><AdminLectureEditPage /></AdminRoute>} /> */}
-            
-            {/* 暂时不加路由保护 */}
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/users" element={<UserManagementPage />} />
-            <Route path="/admin/news" element={<AdminNewsManagementPage />} />
-            <Route path="/admin/news/create" element={<AdminNewsCreatePage />} />
-            <Route path="/admin/news/edit/:id" element={<AdminNewsEditPage />} />
-            <Route path="/admin/lectures" element={<AdminLectureManagementPage />} />
-            <Route path="/admin/lectures/create" element={<AdminLectureCreatePage />} />
-            <Route path="/admin/lectures/edit/:id" element={<AdminLectureEditPage />} />
+            {/* 管理员路由 - 使用 AdminRoute 组件保护 */}
+            <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+            <Route path="/admin/users" element={<AdminRoute><UserManagementPage /></AdminRoute>} />
+            <Route path="/admin/news" element={<AdminRoute><AdminNewsManagementPage /></AdminRoute>} />
+            <Route path="/admin/news/create" element={<AdminRoute><AdminNewsCreatePage /></AdminRoute>} />
+            <Route path="/admin/news/edit/:id" element={<AdminRoute><AdminNewsEditPage /></AdminRoute>} />
+            <Route path="/admin/lectures" element={<AdminRoute><AdminLectureManagementPage /></AdminRoute>} />
+            <Route path="/admin/lectures/create" element={<AdminRoute><AdminLectureCreatePage /></AdminRoute>} />
+            <Route path="/admin/lectures/edit/:id" element={<AdminRoute><AdminLectureEditPage /></AdminRoute>} />
 
             {/* 404 Route */}
             <Route path="*" element={<NotFoundPage />} />

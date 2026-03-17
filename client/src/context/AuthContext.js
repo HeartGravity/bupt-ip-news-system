@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 export const AuthContext = createContext();
@@ -154,10 +154,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 清除错误信息
-  const clearError = () => {
+  // 清除错误信息（使用 useCallback 保持引用稳定，防止 useEffect 无限循环）
+  const clearError = useCallback(() => {
     setError(null);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider

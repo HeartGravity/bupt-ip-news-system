@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { format } from 'date-fns';
 import { FaUser, FaCalendarAlt, FaEye, FaThumbsUp, FaRegThumbsUp, FaBookmark, FaRegBookmark, FaShare } from 'react-icons/fa';
+import DOMPurify from 'dompurify';
 import { newsApi } from '../../services/api';
 import { AuthContext } from '../../context/AuthContext';
 import LoadingSpinner from '../ui/LoadingSpinner';
@@ -261,7 +262,7 @@ useEffect(() => {
       
       <NewsContainer className="container">
         <MainContent>
-          <NewsContent dangerouslySetInnerHTML={{ __html: content }} />
+          <NewsContent dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
           
           <TagsContainer>
             {tags.map((tag, index) => (

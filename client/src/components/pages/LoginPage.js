@@ -18,16 +18,21 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // 从 URL 参数中获取成功消息（如有）
+  // 从 URL 参数中获取成功消息（使用白名单防止反射攻击）
+  const ALLOWED_MESSAGES = {
+    'register': '注册成功，请登录',
+    'password-reset': '密码重置成功，请重新登录',
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const successMsg = params.get('success');
-    
-    if (successMsg) {
+    const successKey = params.get('success');
+
+    if (successKey && ALLOWED_MESSAGES[successKey]) {
       setAlertInfo({
         show: true,
         type: 'success',
-        message: decodeURIComponent(successMsg)
+        message: ALLOWED_MESSAGES[successKey]
       });
       
       // 5秒后自动关闭提示
