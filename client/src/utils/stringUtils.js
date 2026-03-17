@@ -21,7 +21,9 @@ export const truncateString = (str, maxLength = 100) => {
   export const highlightKeyword = (text, keyword) => {
     if (!text || !keyword) return text;
     
-    const regex = new RegExp(`(${keyword})`, 'gi');
+  // 转义正则特殊字符
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escaped})`, 'gi');
     return text.replace(regex, '<span class="highlight">$1</span>');
   };
   
