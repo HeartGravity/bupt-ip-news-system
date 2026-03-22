@@ -1,11 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { FaEnvelope, FaPhone, FaMapMarkerAlt, FaWeixin, FaWeibo } from 'react-icons/fa';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
-  
+
   return (
     <FooterContainer>
       <FooterWrapper>
@@ -26,7 +26,7 @@ const Footer = () => {
             </SocialLink>
           </SocialLinks>
         </FooterSection>
-        
+
         <FooterSection>
           <FooterTitle>快速链接</FooterTitle>
           <FooterLinks>
@@ -39,7 +39,7 @@ const Footer = () => {
             <FooterLink to="/ip-service">知识产权服务中心</FooterLink>
           </FooterLinks>
         </FooterSection>
-        
+
         <FooterSection>
           <FooterTitle>服务指南</FooterTitle>
           <FooterLinks>
@@ -50,7 +50,7 @@ const Footer = () => {
             <FooterLink to="/page/faq">常见问题</FooterLink>
           </FooterLinks>
         </FooterSection>
-        
+
         <FooterSection>
           <FooterTitle>联系我们</FooterTitle>
           <ContactInfo>
@@ -69,7 +69,7 @@ const Footer = () => {
           </ContactInfo>
         </FooterSection>
       </FooterWrapper>
-      
+
       <FooterBottom>
         <Copyright>
           © {currentYear} 北邮一站式知识产权服务中心. 保留所有权利.
@@ -86,9 +86,20 @@ const Footer = () => {
 
 // 样式组件
 const FooterContainer = styled.footer`
-  background-color: var(--bg-dark);
+  background: var(--gradient-dark);
   color: var(--text-white);
-  padding-top: var(--spacing-xl);
+  padding-top: var(--spacing-section);
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(37,99,235,0.4), rgba(6,182,212,0.4), transparent);
+  }
 `;
 
 const FooterWrapper = styled.div`
@@ -98,11 +109,11 @@ const FooterWrapper = styled.div`
   max-width: var(--container-max-width);
   margin: 0 auto;
   padding: 0 var(--container-padding);
-  
+
   @media (min-width: 768px) {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   @media (min-width: 992px) {
     grid-template-columns: 2fr 1fr 1fr 1.5fr;
   }
@@ -116,25 +127,31 @@ const FooterLogo = styled.div`
   display: flex;
   flex-direction: column;
   margin-bottom: var(--spacing-md);
-  
+
   .logo-text {
     font-size: var(--font-size-xl);
     font-weight: 700;
     color: var(--text-white);
     letter-spacing: 1px;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
-  
+
   .logo-subtext {
     font-size: var(--font-size-xs);
-    color: var(--text-light);
+    color: rgba(255, 255, 255, 0.5);
     letter-spacing: 3px;
+    margin-top: 4px;
   }
 `;
 
 const FooterDescription = styled.p`
-  color: var(--text-light);
+  color: rgba(255, 255, 255, 0.55);
   margin-bottom: var(--spacing-md);
-  line-height: 1.6;
+  line-height: 1.8;
+  font-size: 0.9rem;
 `;
 
 const SocialLinks = styled.div`
@@ -146,17 +163,21 @@ const SocialLink = styled.a`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background-color: rgba(255, 255, 255, 0.1);
-  color: var(--text-white);
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
   font-size: var(--font-size-lg);
-  transition: all var(--transition-normal);
-  
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
   &:hover {
-    background-color: var(--primary-color);
+    background: var(--gradient-primary);
+    color: white;
+    border-color: transparent;
     transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(37, 99, 235, 0.35);
   }
 `;
 
@@ -167,15 +188,16 @@ const FooterTitle = styled.h3`
   font-weight: 600;
   position: relative;
   padding-bottom: var(--spacing-sm);
-  
-  &:after {
+
+  &::after {
     content: '';
     position: absolute;
     bottom: 0;
     left: 0;
     width: 40px;
     height: 2px;
-    background-color: var(--primary-color);
+    background: var(--gradient-primary);
+    border-radius: 1px;
   }
 `;
 
@@ -186,12 +208,13 @@ const FooterLinks = styled.div`
 `;
 
 const FooterLink = styled(Link)`
-  color: var(--text-light);
+  color: rgba(255, 255, 255, 0.55);
   text-decoration: none;
-  transition: color var(--transition-fast);
-  
+  transition: all 0.25s ease;
+  font-size: 0.9rem;
+
   &:hover {
-    color: var(--primary-light);
+    color: rgba(255, 255, 255, 0.95);
     padding-left: var(--spacing-xs);
   }
 `;
@@ -205,23 +228,26 @@ const ContactInfo = styled.div`
 const ContactItem = styled.div`
   display: flex;
   align-items: flex-start;
-  color: var(--text-light);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.9rem;
+  line-height: 1.6;
 `;
 
 const ContactIcon = styled.span`
   margin-right: var(--spacing-sm);
-  color: var(--primary-light);
+  color: rgba(37, 99, 235, 0.7);
+  margin-top: 3px;
 `;
 
 const FooterBottom = styled.div`
-  background-color: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding: var(--spacing-md) 0;
   text-align: center;
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-xl);
 `;
 
 const Copyright = styled.p`
-  color: var(--text-light);
+  color: rgba(255, 255, 255, 0.35);
   font-size: var(--font-size-sm);
   margin-bottom: var(--spacing-xs);
 `;
@@ -234,17 +260,18 @@ const ExtraLinks = styled.div`
 `;
 
 const ExtraLink = styled.a`
-  color: var(--primary-light);
+  color: rgba(37, 99, 235, 0.6);
   font-size: var(--font-size-sm);
   text-decoration: none;
-  
+  transition: color 0.25s ease;
+
   &:hover {
-    text-decoration: underline;
+    color: rgba(37, 99, 235, 0.9);
   }
 `;
 
 const Separator = styled.span`
-  color: var(--text-light);
+  color: rgba(255, 255, 255, 0.2);
 `;
 
 export default Footer;
