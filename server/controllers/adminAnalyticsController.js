@@ -1,5 +1,5 @@
 const asyncHandler = require("../middleware/asyncHandler");
-const ErrorResponse = require("../utils/errorResponse");
+const ErrorResponse = require("../utils/ErrorResponse");
 const ChatHistory = require("../models/ChatHistory");
 
 // @desc    获取 AI 统计信息 (后台看板使用)

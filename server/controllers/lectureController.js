@@ -1,6 +1,6 @@
-const Lecture = require('../models/Lecture');
-const asyncHandler = require('../middleware/asyncHandler');
-const ErrorResponse = require('../utils/errorResponse');
+const Lecture = require("../models/Lecture");
+const asyncHandler = require("../middleware/asyncHandler");
+const ErrorResponse = require("../utils/ErrorResponse");
 
 // @desc    获取所有讲座
 // @route   GET /api/lectures
@@ -22,9 +22,7 @@ exports.getLecture = asyncHandler(async (req, res, next) => {
   const lecture = await Lecture.findById(req.params.id);
 
   if (!lecture) {
-    return next(
-      new ErrorResponse(`未找到ID为 ${req.params.id} 的讲座`, 404)
-    );
+    return next(new ErrorResponse(`未找到ID为 ${req.params.id} 的讲座`, 404));
   }
 
   res.status(200).json({
@@ -38,8 +36,26 @@ exports.getLecture = asyncHandler(async (req, res, next) => {
 // @access  Private (需要管理员权限 - 后续添加)
 exports.createLecture = asyncHandler(async (req, res, next) => {
   // 白名单过滤，防止 Mass Assignment
-  const { title, description, speaker, lectureTime, location, category, maxAttendees, coverImage } = req.body;
-  const lectureData = { title, description, speaker, lectureTime, location, category, maxAttendees, coverImage };
+  const {
+    title,
+    description,
+    speaker,
+    lectureTime,
+    location,
+    category,
+    maxAttendees,
+    coverImage,
+  } = req.body;
+  const lectureData = {
+    title,
+    description,
+    speaker,
+    lectureTime,
+    location,
+    category,
+    maxAttendees,
+    coverImage,
+  };
   const lecture = await Lecture.create(lectureData);
 
   res.status(201).json({
@@ -55,13 +71,20 @@ exports.updateLecture = asyncHandler(async (req, res, next) => {
   let lecture = await Lecture.findById(req.params.id);
 
   if (!lecture) {
-    return next(
-      new ErrorResponse(`未找到ID为 ${req.params.id} 的讲座`, 404)
-    );
+    return next(new ErrorResponse(`未找到ID为 ${req.params.id} 的讲座`, 404));
   }
 
   // 白名单过滤更新字段
-  const { title, description, speaker, lectureTime, location, category, maxAttendees, coverImage } = req.body;
+  const {
+    title,
+    description,
+    speaker,
+    lectureTime,
+    location,
+    category,
+    maxAttendees,
+    coverImage,
+  } = req.body;
   const updateData = {};
   if (title !== undefined) updateData.title = title;
   if (description !== undefined) updateData.description = description;
@@ -90,9 +113,7 @@ exports.deleteLecture = asyncHandler(async (req, res, next) => {
   const lecture = await Lecture.findById(req.params.id);
 
   if (!lecture) {
-    return next(
-      new ErrorResponse(`未找到ID为 ${req.params.id} 的讲座`, 404)
-    );
+    return next(new ErrorResponse(`未找到ID为 ${req.params.id} 的讲座`, 404));
   }
 
   // TODO: 检查用户是否有权限删除
@@ -103,4 +124,4 @@ exports.deleteLecture = asyncHandler(async (req, res, next) => {
     success: true,
     data: {},
   });
-}); 
+});

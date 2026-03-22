@@ -18,7 +18,7 @@ app.use(
     // 根据环境变量设置CORS源，确保在生产环境中设置了正确的域名
     origin:
       process.env.NODE_ENV === "production"
-        ? process.env.CORS_ORIGIN || "https://ip-news.bupt.edu.cn"
+        ? process.env.CORS_ORIGIN || "https://bupt-ip-news-system.xyz"
         : "http://localhost:3000",
     credentials: true,
   }),

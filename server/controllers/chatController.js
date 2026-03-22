@@ -1,5 +1,5 @@
 const asyncHandler = require("../middleware/asyncHandler");
-const ErrorResponse = require("../utils/errorResponse");
+const ErrorResponse = require("../utils/ErrorResponse");
 const ChatHistory = require("../models/ChatHistory");
 const { retrieveContext, extractKeywords } = require("../utils/ragService");
 
