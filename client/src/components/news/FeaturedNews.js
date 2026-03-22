@@ -1,8 +1,8 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import styled from 'styled-components';
-import { format } from 'date-fns';
-import { FaEye, FaThumbsUp, FaComment, FaArrowRight } from 'react-icons/fa';
+import React from "react";
+import { Link } from "react-router-dom";
+import styled from "styled-components";
+import { format } from "date-fns";
+import { FaEye, FaThumbsUp, FaComment, FaArrowRight } from "react-icons/fa";
 
 const FeaturedNews = ({ news }) => {
   const {
@@ -16,28 +16,34 @@ const FeaturedNews = ({ news }) => {
     views,
     likes,
     comments,
-    author
+    author,
   } = news;
 
   // 格式化日期
-  const formattedDate = format(new Date(publishDate), 'yyyy-MM-dd');
-  
+  const formattedDate = format(new Date(publishDate), "yyyy-MM-dd");
+
   // 默认封面图地址
-  const coverImageUrl = coverImage?.startsWith('http') 
-    ? coverImage 
-    : `/images/covers/${coverImage}`;
-  
+  const coverImageUrl = !coverImage
+    ? "/Images/default-news.jpg"
+    : coverImage.startsWith("http") || coverImage.startsWith("/")
+      ? coverImage.replace("/images/", "/Images/")
+      : coverImage.startsWith("images/") || coverImage.startsWith("Images/")
+        ? `/${coverImage.replace(/^images\//i, "Images/")}`
+        : coverImage.startsWith("covers/")
+          ? `/Images/${coverImage}`
+          : `/Images/covers/${coverImage}`;
+
   return (
     <FeaturedContainer>
       <FeaturedImage>
         <img src={coverImageUrl} alt={title} />
         <FeaturedCategory>{category}</FeaturedCategory>
       </FeaturedImage>
-      
+
       <FeaturedContent>
         <FeaturedMeta>
           <FeaturedDate>{formattedDate}</FeaturedDate>
-          
+
           <FeaturedStats>
             <FeaturedStat title="浏览量">
               <FaEye /> <span>{views}</span>
@@ -50,16 +56,16 @@ const FeaturedNews = ({ news }) => {
             </FeaturedStat>
           </FeaturedStats>
         </FeaturedMeta>
-        
+
         <FeaturedTitle>{title}</FeaturedTitle>
         <FeaturedSummary>{summary}</FeaturedSummary>
-        
+
         <FeaturedTags>
           {tags.slice(0, 5).map((tag, index) => (
             <FeaturedTag key={index}>{tag}</FeaturedTag>
           ))}
         </FeaturedTags>
-        
+
         <FeaturedReadMore to={`/news/${_id}`}>
           阅读全文 <FaArrowRight />
         </FeaturedReadMore>
@@ -77,7 +83,7 @@ const FeaturedContainer = styled.div`
   border-radius: var(--border-radius-lg);
   overflow: hidden;
   box-shadow: var(--box-shadow);
-  
+
   @media (min-width: 768px) {
     grid-template-columns: 1fr 1fr;
   }
@@ -85,7 +91,7 @@ const FeaturedContainer = styled.div`
 
 const FeaturedImage = styled.div`
   position: relative;
-  
+
   img {
     width: 100%;
     height: 100%;
@@ -174,15 +180,15 @@ const FeaturedReadMore = styled(Link)`
   font-size: var(--font-size-md);
   text-decoration: none;
   transition: all var(--transition-fast);
-  
+
   svg {
     margin-left: var(--spacing-xs);
     transition: transform var(--transition-fast);
   }
-  
+
   &:hover {
     color: var(--primary-dark);
-    
+
     svg {
       transform: translateX(5px);
     }

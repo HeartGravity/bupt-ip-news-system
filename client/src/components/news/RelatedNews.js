@@ -1,42 +1,44 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import styled from 'styled-components';
-import { format } from 'date-fns';
-import { FaEye } from 'react-icons/fa';
-import { newsApi } from '../../services/api';
-import LoadingSpinner from '../ui/LoadingSpinner';
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import styled from "styled-components";
+import { format } from "date-fns";
+import { FaEye } from "react-icons/fa";
+import { newsApi } from "../../services/api";
+import LoadingSpinner from "../ui/LoadingSpinner";
 
 const RelatedNews = ({ category, currentNewsId }) => {
   const [relatedNews, setRelatedNews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   useEffect(() => {
     const fetchRelatedNews = async () => {
       if (!category || !currentNewsId) return;
-      
+
       try {
         setLoading(true);
         const response = await newsApi.getNews(1, 5, category);
-        
+
         if (response.success) {
           // 过滤掉当前新闻
-          const filteredNews = response.data.filter(news => news._id !== currentNewsId);
+          const filteredNews = response.data.filter(
+            (news) => news._id !== currentNewsId,
+          );
           setRelatedNews(filteredNews.slice(0, 4)); // 最多显示4篇相关新闻
         } else {
-          setError('获取相关新闻失败');
+          setError("获取相关新闻失败");
         }
       } catch (err) {
-        console.error('获取相关新闻出错:', err);
-        setError('获取相关新闻时发生错误');
+        console.error("获取相关新闻出错:", err);
+        setError("获取相关新闻时发生错误");
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchRelatedNews();
   }, [category, currentNewsId]);
-  
+
   if (loading) {
     return (
       <RelatedNewsContainer>
@@ -45,29 +47,39 @@ const RelatedNews = ({ category, currentNewsId }) => {
       </RelatedNewsContainer>
     );
   }
-  
+
   if (error || relatedNews.length === 0) {
     return null; // 如果有错误或没有相关新闻，不显示此区域
   }
-  
+
   return (
     <RelatedNewsContainer>
       <RelatedNewsTitle>相关阅读</RelatedNewsTitle>
       <RelatedNewsList>
-        {relatedNews.map(news => (
+        {relatedNews.map((news) => (
           <RelatedNewsItem key={news._id}>
             <RelatedNewsLink to={`/news/${news._id}`}>
               {news.coverImage && (
-                <RelatedNewsImage 
-                  src={news.coverImage.startsWith('http') ? news.coverImage : `/images/covers/${news.coverImage}`} 
-                  alt={news.title} 
+                <RelatedNewsImage
+                  src={
+                    news.coverImage.startsWith("http") ||
+                    news.coverImage.startsWith("/")
+                      ? news.coverImage.replace("/images/", "/Images/")
+                      : news.coverImage.startsWith("images/") ||
+                          news.coverImage.startsWith("Images/")
+                        ? `/${news.coverImage.replace(/^images\//i, "Images/")}`
+                        : news.coverImage.startsWith("covers/")
+                          ? `/Images/${news.coverImage}`
+                          : `/Images/covers/${news.coverImage}`
+                  }
+                  alt={news.title}
                 />
               )}
               <RelatedNewsContent>
                 <RelatedNewsItemTitle>{news.title}</RelatedNewsItemTitle>
                 <RelatedNewsMeta>
                   <RelatedNewsDate>
-                    {format(new Date(news.publishDate), 'yyyy-MM-dd')}
+                    {format(new Date(news.publishDate), "yyyy-MM-dd")}
                   </RelatedNewsDate>
                   <RelatedNewsViews>
                     <FaEye /> {news.views}
@@ -98,9 +110,9 @@ const RelatedNewsTitle = styled.h3`
   color: var(--text-primary);
   margin-bottom: var(--spacing-md);
   position: relative;
-  
+
   &:after {
-    content: '';
+    content: "";
     position: absolute;
     bottom: -8px;
     left: 0;
@@ -118,7 +130,7 @@ const RelatedNewsList = styled.ul`
 
 const RelatedNewsItem = styled.li`
   margin-bottom: var(--spacing-md);
-  
+
   &:last-child {
     margin-bottom: 0;
   }
@@ -130,7 +142,7 @@ const RelatedNewsLink = styled(Link)`
   text-decoration: none;
   color: var(--text-primary);
   transition: transform var(--transition-fast);
-  
+
   &:hover {
     transform: translateX(5px);
     color: var(--primary-color);
@@ -153,7 +165,7 @@ const RelatedNewsItemTitle = styled.h4`
   font-size: var(--font-size-sm);
   margin: 0 0 var(--spacing-xs);
   line-height: 1.4;
-  
+
   /* 标题最多显示两行 */
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -183,7 +195,7 @@ const ViewMoreLink = styled(Link)`
   color: var(--primary-color);
   font-size: var(--font-size-sm);
   text-decoration: none;
-  
+
   &:hover {
     text-decoration: underline;
   }

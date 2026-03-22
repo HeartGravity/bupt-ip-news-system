@@ -1,8 +1,8 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import styled from 'styled-components';
-import { format } from 'date-fns';
-import { FaEye, FaThumbsUp, FaComment } from 'react-icons/fa';
+import React from "react";
+import { Link } from "react-router-dom";
+import styled from "styled-components";
+import { format } from "date-fns";
+import { FaEye, FaThumbsUp, FaComment } from "react-icons/fa";
 
 const NewsCard = ({ news }) => {
   const {
@@ -16,33 +16,37 @@ const NewsCard = ({ news }) => {
     views,
     likes,
     comments,
-    author
+    author,
   } = news;
 
   // 格式化日期
-  const formattedDate = format(new Date(publishDate), 'yyyy-MM-dd');
-  
+  const formattedDate = format(new Date(publishDate), "yyyy-MM-dd");
+
   // 默认封面图地址
-const coverImageUrl = coverImage
-? (coverImage.startsWith('http') 
-    ? coverImage 
-    : `/images/covers/${coverImage}`)
-: '/images/default-news.jpg';
-  
+  const coverImageUrl = !coverImage
+    ? "/Images/default-news.jpg"
+    : coverImage.startsWith("http") || coverImage.startsWith("/")
+      ? coverImage.replace("/images/", "/Images/")
+      : coverImage.startsWith("images/") || coverImage.startsWith("Images/")
+        ? `/${coverImage.replace(/^images\//i, "Images/")}`
+        : coverImage.startsWith("covers/")
+          ? `/Images/${coverImage}`
+          : `/Images/covers/${coverImage}`;
+
   return (
     <CardContainer to={`/news/${_id}`}>
       <CardImageWrapper>
         <CardImage src={coverImageUrl} alt={title} />
         <CardCategory>{category}</CardCategory>
       </CardImageWrapper>
-      
+
       <CardBody>
         <CardTitle>{title}</CardTitle>
         <CardSummary>{summary}</CardSummary>
-        
+
         <CardMeta>
           <CardDate>{formattedDate}</CardDate>
-          
+
           <CardStats>
             <CardStat title="浏览量">
               <FaEye /> <span>{views}</span>
@@ -55,7 +59,7 @@ const coverImageUrl = coverImage
             </CardStat>
           </CardStats>
         </CardMeta>
-        
+
         <CardTags>
           {tags.slice(0, 3).map((tag, index) => (
             <CardTag key={index}>{tag}</CardTag>
@@ -74,11 +78,13 @@ const CardContainer = styled(Link)`
   border-radius: var(--border-radius-lg);
   overflow: hidden;
   box-shadow: var(--box-shadow);
-  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+  transition:
+    transform var(--transition-normal),
+    box-shadow var(--transition-normal);
   text-decoration: none;
   color: var(--text-primary);
   height: 100%;
-  
+
   &:hover {
     transform: translateY(-5px);
     box-shadow: var(--box-shadow-hover);
@@ -101,7 +107,7 @@ const CardImage = styled.img`
   height: 100%;
   object-fit: cover;
   transition: transform var(--transition-normal);
-  
+
   ${CardContainer}:hover & {
     transform: scale(1.05);
   }
@@ -131,7 +137,7 @@ const CardTitle = styled.h3`
   font-size: var(--font-size-lg);
   margin-bottom: var(--spacing-sm);
   line-height: 1.3;
-  
+
   /* 标题最多显示两行 */
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -145,7 +151,7 @@ const CardSummary = styled.p`
   font-size: var(--font-size-sm);
   margin-bottom: var(--spacing-md);
   flex-grow: 1;
-  
+
   /* 摘要最多显示三行 */
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -176,7 +182,7 @@ const CardStat = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
-  
+
   svg {
     font-size: 12px;
   }
