@@ -348,7 +348,9 @@ const NewsDetailPage = () => {
             <AuthorBio>知识产权资讯编辑</AuthorBio>
           </AuthorCard>
 
-          <RelatedNews category={category} currentNewsId={id} />
+          <RelatedNewsWrapper>
+            <RelatedNews category={category} currentNewsId={id} />
+          </RelatedNewsWrapper>
         </Sidebar>
       </NewsContainer>
     </PageContainer>
@@ -358,17 +360,17 @@ const NewsDetailPage = () => {
 // 样式组件
 const PageContainer = styled.div`
   min-height: 100vh;
+  background-color: var(--bg-primary);
 `;
 
 const NewsHeader = styled.div`
-  height: 400px;
+  height: 450px;
   background-size: cover;
   background-position: center;
   position: relative;
-  margin-bottom: var(--spacing-xl);
 
   @media (max-width: 768px) {
-    height: 300px;
+    height: 320px;
   }
 `;
 
@@ -380,28 +382,35 @@ const HeaderOverlay = styled.div`
   height: 100%;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.1),
-    rgba(0, 0, 0, 0.8)
+    rgba(15, 23, 42, 0.1) 0%,
+    rgba(15, 23, 42, 0.85) 100%
   );
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-xxl);
 `;
 
 const BreadcrumbNav = styled.div`
-  display: flex;
+  display: inline-flex;
   align-items: center;
   margin-bottom: var(--spacing-md);
-  color: white;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--border-radius-full);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 `;
 
 const BreadcrumbItem = styled.span`
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.75);
   font-size: var(--font-size-sm);
+  transition: color var(--transition-fast);
 
   &:last-child {
     color: white;
+    font-weight: 500;
   }
 
   &:hover {
@@ -412,7 +421,8 @@ const BreadcrumbItem = styled.span`
 
 const BreadcrumbSeparator = styled.span`
   margin: 0 var(--spacing-xs);
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.4);
+  font-size: var(--font-size-xs);
 `;
 
 const NewsTitle = styled.h1`
@@ -420,7 +430,8 @@ const NewsTitle = styled.h1`
   font-size: var(--font-size-xxxl);
   margin-bottom: var(--spacing-md);
   line-height: 1.3;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  letter-spacing: -0.01em;
 
   @media (max-width: 768px) {
     font-size: var(--font-size-xxl);
@@ -442,6 +453,7 @@ const MetaItem = styled.div`
 
   svg {
     margin-right: var(--spacing-xs);
+    opacity: 0.8;
   }
 `;
 
@@ -449,7 +461,11 @@ const NewsContainer = styled.div`
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--spacing-xl);
+  margin-top: -40px;
+  position: relative;
+  z-index: 5;
   margin-bottom: var(--spacing-xxl);
+  padding-bottom: var(--spacing-xxl);
 
   @media (min-width: 992px) {
     grid-template-columns: 3fr 1fr;
@@ -457,16 +473,24 @@ const NewsContainer = styled.div`
 `;
 
 const MainContent = styled.div`
-  background-color: var(--bg-secondary);
-  border-radius: var(--border-radius-lg);
-  box-shadow: var(--box-shadow);
-  padding: var(--spacing-xl);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: var(--spacing-xxl);
+
+  @media (max-width: 768px) {
+    padding: var(--spacing-lg);
+    border-radius: var(--border-radius-lg);
+  }
 `;
 
 const NewsContent = styled.div`
-  line-height: 1.8;
+  line-height: 1.9;
   color: var(--text-primary);
-  font-size: 16px;
+  font-size: 18px;
   font-family: inherit;
 
   /* 重置原站内联字体/大小，避免全文统一大号黑体 */
@@ -534,10 +558,13 @@ const NewsContent = styled.div`
   }
 
   blockquote {
-    border-left: 4px solid var(--primary-color);
-    padding-left: var(--spacing-md);
+    border-left: 4px solid var(--accent-cyan);
+    padding: var(--spacing-md) var(--spacing-lg);
     margin-left: 0;
     margin-right: 0;
+    margin-bottom: var(--spacing-md);
+    background: rgba(6, 182, 212, 0.05);
+    border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
     color: var(--text-secondary);
     font-style: italic;
   }
@@ -573,21 +600,25 @@ const NewsContent = styled.div`
 const TagsContainer = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
   margin: var(--spacing-xl) 0;
 `;
 
 const TagItem = styled.span`
-  background-color: var(--bg-primary);
-  color: var(--text-secondary);
+  background: var(--primary-100);
+  color: var(--primary-600);
   font-size: var(--font-size-sm);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--border-radius-md);
+  font-weight: 500;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--border-radius-full);
   transition: all var(--transition-fast);
+  cursor: pointer;
 
   &:hover {
-    background-color: var(--primary-light);
+    background: var(--primary-600);
     color: white;
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
   }
 `;
 
@@ -601,19 +632,25 @@ const ActionButton = styled.button`
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  background-color: ${(props) =>
-    props.active ? "var(--primary-color)" : "var(--bg-primary)"};
+  background: ${(props) =>
+    props.active ? "var(--gradient-primary)" : "var(--bg-primary)"};
   color: ${(props) => (props.active ? "white" : "var(--text-secondary)")};
   border: none;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--border-radius-md);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--border-radius-full);
   cursor: pointer;
+  font-weight: 500;
+  font-size: var(--font-size-sm);
   transition: all var(--transition-fast);
+  box-shadow: ${(props) =>
+    props.active ? "var(--shadow-glow)" : "var(--shadow-sm)"};
 
   &:hover {
-    background-color: ${(props) =>
-      props.active ? "var(--primary-dark)" : "var(--primary-light)"};
+    background: ${(props) =>
+      props.active ? "var(--gradient-primary)" : "var(--primary-600)"};
     color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
 `;
 
@@ -630,11 +667,16 @@ const Sidebar = styled.aside`
 `;
 
 const AuthorCard = styled.div`
-  background-color: var(--bg-secondary);
-  border-radius: var(--border-radius-lg);
-  box-shadow: var(--box-shadow);
-  padding: var(--spacing-lg);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-xl);
   text-align: center;
+  position: sticky;
+  top: 100px;
 `;
 
 const AuthorAvatar = styled.img`
@@ -643,6 +685,8 @@ const AuthorAvatar = styled.img`
   border-radius: 50%;
   object-fit: cover;
   margin-bottom: var(--spacing-sm);
+  border: 3px solid var(--primary-100);
+  box-shadow: var(--shadow-sm);
 `;
 
 const AuthorName = styled.h3`
@@ -657,6 +701,16 @@ const AuthorBio = styled.p`
   margin-bottom: 0;
 `;
 
+const RelatedNewsWrapper = styled.div`
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-lg);
+`;
+
 const ErrorContainer = styled.div`
   text-align: center;
   padding: var(--spacing-xxl) 0;
@@ -669,17 +723,20 @@ const ErrorMessage = styled.div`
 `;
 
 const BackButton = styled.button`
-  background-color: var(--primary-color);
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  padding: var(--spacing-sm) var(--spacing-lg);
-  border-radius: var(--border-radius-md);
+  padding: var(--spacing-sm) var(--spacing-xl);
+  border-radius: var(--border-radius-full);
   font-size: var(--font-size-md);
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color var(--transition-fast);
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-md);
 
   &:hover {
-    background-color: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-glow);
     color: white;
   }
 `;
